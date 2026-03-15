@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useDashboardData } from "./useGraphData.js";
 
 const USER_ROLE = "admin"; // "manager" pour masquer l'onglet Contrat
 
@@ -337,18 +338,13 @@ const ADOPTION_BY_ENTITY = {
 };
 
 // ─── SCORECARD ────────────────────────────────────────────────────────────────
-function Scorecard({ filters, setGlossaire }) {
-  const sc = SCORECARD_BY_ENTITY[filters.entity] || SCORECARD_BY_ENTITY["Toutes"];
-  // Appliquer ratio région/segment (simulation simplifiée)
-  const regionRatio  = filters.region  !== "Toutes"  ? 0.38 : 1;
-  const segmentRatio = filters.segment !== "Tous"    ? 0.22 : 1;
-  const globalRatio  = filters.region !== "Toutes" && filters.segment !== "Tous" ? 0.14
-                     : filters.region !== "Toutes" ? regionRatio
-                     : filters.segment !== "Tous"  ? segmentRatio : 1;
-  const adj = (v) => Math.round(v * globalRatio);
-  const eco = Math.round(adj(sc.economieEstimee) / 12);
-  const workloads = ADOPTION_BY_ENTITY[filters.entity] || ADOPTION_BY_ENTITY["Toutes"];
-  const maxA = Math.max(...workloads.map(w => w.actifs));
+function Scorecard({ filters, setGlossaire, liveData }) {
+  const sc = liveData?.scorecard || (SCORECARD_BY_ENTITY[filters.entity] || SCORECARD_BY_ENTITY["Toutes"]);
+  const workloads = liveData?.adoptionByWorkload?.length
+    ? liveData.adoptionByWorkload
+    : (ADOPTION_BY_ENTITY[filters.entity] || ADOPTION_BY_ENTITY["Toutes"]);
+  const eco = Math.round((sc.economieEstimee || 0) / 12);
+  const maxA = Math.max(...workloads.map(w => w.actifs), 1);
   return (
     <div>
       <div style={{ marginBottom: 20 }}>
@@ -358,19 +354,19 @@ function Scorecard({ filters, setGlossaire }) {
 
       {/* Layout 2×3 + bloc économie sur 2 lignes à droite */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 160px", gridTemplateRows: "auto auto", gap: 12, marginBottom: 28 }}>
-        <KpiCard label="Licences assignées"  value={fmt(adj(sc.licencesAssignees))} sub="Stock actif" />
-        <KpiCard label="Comptes actifs 30j"  value={fmt(adj(sc.comptesActifs))}    sub={`${Math.round(sc.comptesActifs/sc.licencesAssignees*100)}% des assignés`} color="#10B981" />
-        <KpiCard label="Comptes inactifs"    value={fmt(adj(sc.comptesInactifs))}  sub=">90j sans connexion" color="#F59E0B" alert />
+        <KpiCard label="Licences assignées"  value={fmt(sc.licencesAssignees)} sub="Stock actif" />
+        <KpiCard label="Comptes actifs 30j"  value={fmt(sc.comptesActifs)}    sub={`${Math.round((sc.comptesActifs||0)/(sc.licencesAssignees||1)*100)}% des assignés`} color="#10B981" />
+        <KpiCard label="Comptes inactifs"    value={fmt(sc.comptesInactifs)}  sub=">90j sans connexion" color="#F59E0B" alert />
         {/* Bloc économie — span 2 lignes */}
         <div style={{ gridRow: "1 / 3", background: "linear-gradient(160deg,#4F46E5,#7C3AED)", borderRadius: 14, padding: "20px 18px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "flex-start", color: "#fff" }}>
           <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#C7D2FE", marginBottom: 8 }}>Économie estimée</div>
           <div style={{ fontSize: 30, fontWeight: 800, fontFamily: "monospace", lineHeight: 1 }}>{fmtEur(eco)}</div>
           <div style={{ fontSize: 11, color: "#A5B4FC", marginTop: 6 }}>/ mois</div>
-          <div style={{ marginTop: 12, fontSize: 10, color: "#C7D2FE", lineHeight: 1.5 }}>Potentiel annuel<br /><strong style={{ color: "#fff" }}>{fmtEur(adj(sc.economieEstimee))}</strong></div>
+          <div style={{ marginTop: 12, fontSize: 10, color: "#C7D2FE", lineHeight: 1.5 }}>Potentiel annuel<br /><strong style={{ color: "#fff" }}>{fmtEur(sc.economieEstimee || 0)}</strong></div>
         </div>
-        <KpiCard label="Comptes bloqués"     value={fmt(adj(sc.comptesBloqués))}   sub="Licence encore assignée" color="#EF4444" alert />
-        <KpiCard label="Sans EMS"            value={fmt(adj(sc.licencesSansEMS))}  sub="Non-conformité sécu" color="#EF4444" alert />
-        <KpiCard label="Double assignation"  value={fmt(adj(sc.doubleAssignation))}sub="Plans en conflit" color="#7C3AED" alert />
+        <KpiCard label="Comptes bloqués"     value={fmt(sc.comptesBloqués)}   sub="Licence encore assignée" color="#EF4444" alert />
+        <KpiCard label="Sans EMS"            value={fmt(sc.licencesSansEMS)}  sub="Non-conformité sécu" color="#EF4444" alert />
+        <KpiCard label="Double assignation"  value={fmt(sc.doubleAssignation)}sub="Plans en conflit" color="#7C3AED" alert />
       </div>
 
       {/* Adoption workload */}
@@ -410,11 +406,12 @@ function Scorecard({ filters, setGlossaire }) {
 }
 
 // ─── LICENCES ─────────────────────────────────────────────────────────────────
-function Licences({ filters }) {
+function Licences({ filters, liveData }) {
   const [sel, setSel] = useState("Tous");
-
-  // Plans filtrés selon l'entité sélectionnée
-  const allPlans = DATA.licencesByPlanByEntity[filters.entity] || DATA.licencesByPlanByEntity["Toutes"];
+  // Plans : données réelles si disponibles, fictives sinon
+  const allPlans = liveData?.licencesByPlan?.length
+    ? liveData.licencesByPlan
+    : (DATA.licencesByPlanByEntity[filters.entity] || DATA.licencesByPlanByEntity["Toutes"]);
   const fp = sel === "Tous" ? allPlans : allPlans.filter(p => p.plan === sel);
 
   const acquises  = fp.reduce((s,p)=>s+p.acquises,0);
@@ -795,11 +792,12 @@ function MindMapProfils({ filters }) {
 }
 
 // ─── PROFILS ──────────────────────────────────────────────────────────────────
-function Profils({ filters }) {
+function Profils({ filters, liveData }) {
   const [filtre, setFiltre] = useState("Tous");
+  const baseUsers = liveData?.profileUsers?.length ? liveData.profileUsers : DATA.profileUsers;
 
   const users = useMemo(() => {
-    let u = DATA.profileUsers;
+    let u = baseUsers;
     if (filters.entity  !== "Toutes") u = u.filter(x => x.entite  === filters.entity);
     if (filters.region  !== "Toutes") u = u.filter(x => x.region  === filters.region);
     if (filters.segment !== "Tous")   u = u.filter(x => x.segment === filters.segment);
@@ -1279,13 +1277,48 @@ function Glossaire({ onClose }) {
 const BASE_NAV = ["Scorecard", "Licences", "Groupe", "Profils", "Utilisateur"];
 const NAV_ITEMS = USER_ROLE === "admin" ? [...BASE_NAV, "Contrat"] : BASE_NAV;
 
+// Bannière de statut API (chargement / erreur / source des données)
+function ApiBanner({ loading, hasErrors, errors }) {
+  if (loading) return (
+    <div style={{ background: "#EFF6FF", borderBottom: "1px solid #BFDBFE", padding: "6px 28px", display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "#1D4ED8" }}>
+      <span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span>
+      Chargement des données Graph API en cours…
+    </div>
+  );
+  if (hasErrors) return (
+    <div style={{ background: "#FFFBEB", borderBottom: "1px solid #FDE68A", padding: "6px 28px", display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "#92400E" }}>
+      ⚠ Certaines données sont fictives — erreur API :
+      {Object.entries(errors).filter(([,v])=>v).map(([k,v]) => (
+        <span key={k} style={{ background: "#FEF3C7", padding: "1px 8px", borderRadius: 4, fontFamily: "monospace", marginLeft: 4 }}>{k}: {v.includes("403") ? "403 Forbidden — vérifier le consentement admin Azure AD" : v.slice(0, 60)}</span>
+      ))}
+    </div>
+  );
+  return (
+    <div style={{ background: "#F0FDF4", borderBottom: "1px solid #BBF7D0", padding: "6px 28px", fontSize: 11, color: "#15803D" }}>
+      ✓ Données Graph API chargées — tenant réel
+    </div>
+  );
+}
+
 export default function App() {
   const [activeNav, setActiveNav] = useState("Scorecard");
-  // Ordre filtres : Période · Région · Entité · Segment
   const [filters, setFilters] = useState({ period: "Mai 2025", region: "Toutes", entity: "Toutes", segment: "Tous" });
   const [glossaire, setGlossaire] = useState(false);
   const setFilter = (k) => (e) => setFilters(f => ({ ...f, [k]: e.target.value }));
   const sel = { padding: "6px 12px", borderRadius: 8, border: "1px solid #E2E8F0", fontSize: 12, color: "#334155", background: "#F8FAFC", cursor: "pointer", fontFamily: "inherit" };
+
+  // ── Données Graph API réelles (avec fallback sur DATA fictives) ──
+  const graphData = useDashboardData();
+
+  // Fusionner : données réelles prioritaires, fictives en fallback
+  const liveData = {
+    licencesByPlan:    graphData.licencesByPlan    || DATA.licencesByPlan,
+    scorecard:         graphData.scorecard         || DATA.scorecard,
+    adoptionByWorkload:graphData.adoptionByWorkload?.length
+                         ? graphData.adoptionByWorkload
+                         : DATA.adoptionByWorkload,
+    profileUsers:      graphData.profileUsers      || DATA.profileUsers,
+  };
 
   return (
     <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: "#F8FAFC", minHeight: "100vh", color: "#0F172A" }}>
@@ -1299,7 +1332,9 @@ export default function App() {
           </div>
           <div>
             <div style={{ fontSize: 13, fontWeight: 700 }}>M365 Dashboard</div>
-            <div style={{ fontSize: 10, color: "#94A3B8" }}>Données fictives · Démo</div>
+            <div style={{ fontSize: 10, color: graphData.hasErrors ? "#F59E0B" : graphData.loading ? "#94A3B8" : "#10B981" }}>
+              {graphData.loading ? "Chargement…" : graphData.hasErrors ? "Données partielles" : "Données Graph API réelles"}
+            </div>
           </div>
         </div>
         <nav style={{ display: "flex", gap: 2 }}>
@@ -1309,8 +1344,11 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <div style={{ fontSize: 10, color: "#94A3B8" }}>ACME Corp · EU Tenant</div>
+        <div style={{ fontSize: 10, color: "#94A3B8" }}>Tenant · EU</div>
       </div>
+
+      {/* Bannière statut API */}
+      <ApiBanner loading={graphData.loading} hasErrors={graphData.hasErrors} errors={graphData.errors} />
 
       {/* Filtres : Période · Région · Entité · Segment */}
       <div style={{ background: "#fff", borderBottom: "1px solid #E2E8F0", padding: "9px 28px", display: "flex", gap: 10, alignItems: "center" }}>
@@ -1322,16 +1360,16 @@ export default function App() {
       </div>
 
       <div style={{ padding: "26px 28px", maxWidth: 1400, margin: "0 auto" }}>
-        {activeNav === "Scorecard"   && <Scorecard filters={filters} setGlossaire={setGlossaire} />}
-        {activeNav === "Licences"    && <Licences  filters={filters} />}
-        {activeNav === "Groupe"      && <Groupe    filters={filters} />}
-        {activeNav === "Profils"     && <Profils   filters={filters} />}
+        {activeNav === "Scorecard"   && <Scorecard   filters={filters} setGlossaire={setGlossaire} liveData={liveData} />}
+        {activeNav === "Licences"    && <Licences    filters={filters} liveData={liveData} />}
+        {activeNav === "Groupe"      && <Groupe      filters={filters} />}
+        {activeNav === "Profils"     && <Profils     filters={filters} liveData={liveData} />}
         {activeNav === "Utilisateur" && <Utilisateur />}
         {activeNav === "Contrat" && USER_ROLE === "admin" && <Contrat filters={filters} />}
       </div>
 
       <div style={{ borderTop: "1px solid #E2E8F0", padding: "10px 28px", display: "flex", justifyContent: "space-between" }}>
-        <span style={{ fontSize: 10, color: "#94A3B8" }}>M365 Dashboard · Données fictives · Démo prospect</span>
+        <span style={{ fontSize: 10, color: "#94A3B8" }}>M365 Dashboard · {graphData.hasErrors ? "Données partiellement fictives" : "Données Graph API réelles"}</span>
         <span style={{ fontSize: 10, color: "#94A3B8" }}>Source : Microsoft Graph API · SIRH croisé · {filters.period}</span>
       </div>
     </div>
