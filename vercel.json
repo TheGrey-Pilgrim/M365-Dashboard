@@ -1,8 +1,7 @@
 {
   "functions": {
-    "api/*.js": {
-      "runtime": "@vercel/node@3"
+    "api/graph.js": {
+      "runtime": "nodejs20.x"
     }
   }
 }
-
