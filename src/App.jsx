@@ -1,9 +1,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { useDashboardData } from "./useGraphData.js";
 
-const USER_ROLE = "admin"; // "manager" pour masquer l'onglet Contrat
+const USER_ROLE = "admin"; 
 
-// ─── DONNÉES ──────────────────────────────────────────────────────────────────
 const DATA = {
   periods: ["Jan 2025", "Fév 2025", "Mar 2025", "Avr 2025", "Mai 2025"],
   regions: ["Toutes", "France", "EMEA", "APAC", "Americas"],
@@ -72,7 +71,6 @@ const DATA = {
     ],
   },
 
-  // Profils enrichis avec région + segment pour la mind map
   profiles: [
     { nom: "Admin",          count: 42,  couleur: "#DC2626", plan: "Microsoft 365 E5", regions: { France: 18, EMEA: 12, APAC: 6, Americas: 6 },   segments: { IT: 30, Finance: 8, Opérations: 4 } },
     { nom: "Full",           count: 412, couleur: "#4F46E5", plan: "Microsoft 365 E3", regions: { France: 180, EMEA: 120, APAC: 62, Americas: 50 }, segments: { Finance: 140, IT: 90, Commercial: 110, Opérations: 72 } },
@@ -81,7 +79,6 @@ const DATA = {
   ],
 
   profileUsers: [
-    // mailboxSize+archiveSize en Go | downgrade E3 : boite+archive < 48 Go ET OD < 1000 Go → Full Optimized
     { prenom: "Sophie", nom: "Martin",  email: "s.martin@acme.com",  region: "France",   entite: "Holding SA",  segment: "Finance",    planTheorique: "Microsoft 365 E3",  planReel: "Microsoft 365 E3 + Microsoft 365 F3", statut: "double",  stockageOD: 4.2,   mailboxSize: 8.1,  archiveSize: 2.4,  actifTeams: true,  actifSP: true,  copilot: false, eligibleDowngrade: true,  downgradeVers: "Microsoft 365 E1 + Microsoft 365 Apps for Enterprise", raisonDowngrade: "Double plan F3 non justifié · boite+archive < 48 Go · OD < 1 To", coutPlan: 36 },
     { prenom: "Thomas", nom: "Berger",  email: "t.berger@acme.com",  region: "EMEA",     entite: "DE GmbH",     segment: "Opérations", planTheorique: "Microsoft 365 E3",  planReel: "Microsoft 365 E3",                   statut: "inactif", stockageOD: 0.3,   mailboxSize: 1.2,  archiveSize: 0.4,  actifTeams: false, actifSP: false, copilot: false, eligibleDowngrade: true,  downgradeVers: "Microsoft 365 E1 + Microsoft 365 Apps for Enterprise", raisonDowngrade: "Inactif 90j+ · boite+archive 1,6 Go < 48 Go · OD 0,3 Go < 1 To",  coutPlan: 36 },
     { prenom: "Laura",  nom: "Petit",   email: "l.petit@acme.com",   region: "France",   entite: "France SAS",  segment: "RH",         planTheorique: "Microsoft 365 E1",  planReel: "Microsoft 365 E1",                   statut: "bloqué",  stockageOD: 0.1,   mailboxSize: 0.3,  archiveSize: 0.0,  actifTeams: false, actifSP: false, copilot: false, eligibleDowngrade: false, downgradeVers: null,                                                      raisonDowngrade: "Compte bloqué — à déprovisionner",                                  coutPlan: 8  },
@@ -91,7 +88,6 @@ const DATA = {
     { prenom: "Hélène", nom: "Moreau",  email: "h.moreau@acme.com",  region: "France",   entite: "Holding SA",  segment: "IT",         planTheorique: "Microsoft 365 E5",  planReel: "Microsoft 365 E5",                   statut: "ok",      stockageOD: 45.0,  mailboxSize: 98.0, archiveSize: 40.0, actifTeams: true,  actifSP: true,  copilot: true,  eligibleDowngrade: false, downgradeVers: null,                                                      raisonDowngrade: "Admin · profil sécurité justifié",                                  coutPlan: 57 },
   ],
 
-  // Coût downgrade par plan cible
   coutParPlan: {
     "Microsoft 365 E5": 57,
     "Microsoft 365 E3": 36,
@@ -100,7 +96,6 @@ const DATA = {
     "Microsoft 365 F3": 8,
   },
 
-  // Licences par entité (pour filtrage Licences)
   licencesByPlanByEntity: {
     "Toutes":      [
       { plan: "E3",            acquises: 850, assignees: 762, actives: 681, coutUnitaire: 36, couleur: "#4F46E5" },
@@ -134,7 +129,6 @@ const DATA = {
     ],
   },
 
-  // Données Groupe par entité + plan (région × segment)
   groupeDataByEntity: {
     "Toutes": {
       regions:  [{ r: "France", l: 412, a: 378 }, { r: "EMEA",     l: 298, a: 241 }, { r: "APAC",    l: 187, a: 134 }, { r: "Americas", l: 190, a: 181 }],
@@ -158,7 +152,6 @@ const DATA = {
     },
   },
 
-  // Trend par entité
   trendByEntity: {
     "Toutes":     [
       { mois: "Jan", acquises: 1220, assignees: 1050, engagement: 1180 },
@@ -287,7 +280,6 @@ const DATA = {
   ],
 };
 
-// ─── HELPERS ──────────────────────────────────────────────────────────────────
 const fmt   = (n) => typeof n === "number" ? n.toLocaleString("fr-FR") : n;
 const fmtEur= (n) => `${fmt(Math.round(n))} €`;
 const tc    = (t) => t >= 80 ? "#10B981" : t >= 60 ? "#F59E0B" : "#EF4444";
@@ -300,7 +292,6 @@ function downloadCSV(data, filename) {
   a.href = url; a.download = filename; a.click();
 }
 
-// ─── COMPOSANTS COMMUNS ───────────────────────────────────────────────────────
 function KpiCard({ label, value, sub, color = "#4F46E5", alert = false }) {
   return (
     <div style={{ background: "#fff", borderRadius: 12, padding: "16px 18px", border: `1px solid ${alert ? "#FEE2E2" : "#EEF0F6"}`, borderLeft: `4px solid ${alert ? "#EF4444" : color}`, flex: 1, minWidth: 130 }}>
@@ -321,7 +312,6 @@ function StatusBadge({ statut }) {
   return <span style={{ fontSize: 11, fontWeight: 600, background: bg, color: c, padding: "2px 10px", borderRadius: 20 }}>{l}</span>;
 }
 
-// ─── SCORECARD DATA PAR ENTITÉ ────────────────────────────────────────────────
 const SCORECARD_BY_ENTITY = {
   "Toutes":     { licencesAssignees: 1087, comptesActifs: 934, comptesInactifs: 153, comptesBloqués: 12, licencesSansEMS: 34, doubleAssignation: 7, economieEstimee: 47800 },
   "Holding SA": { licencesAssignees: 426,  comptesActifs: 380, comptesInactifs: 46,  comptesBloqués: 4,  licencesSansEMS: 12, doubleAssignation: 2, economieEstimee: 18200 },
@@ -337,7 +327,6 @@ const ADOPTION_BY_ENTITY = {
   "DE GmbH":    [{ workload:"Exchange",actifs:114,taux:99},{ workload:"Teams",actifs:116,taux:87},{ workload:"SharePoint",actifs:76, taux:66},{ workload:"OneDrive",actifs:76, taux:58},{ workload:"Power BI",actifs:19, taux:17},{ workload:"Copilot M365",actifs:10,taux:10}],
 };
 
-// ─── SCORECARD ────────────────────────────────────────────────────────────────
 function Scorecard({ filters, setGlossaire, liveData }) {
   const sc = liveData?.scorecard || (SCORECARD_BY_ENTITY[filters.entity] || SCORECARD_BY_ENTITY["Toutes"]);
   const workloads = liveData?.adoptionByWorkload?.length
@@ -352,12 +341,12 @@ function Scorecard({ filters, setGlossaire, liveData }) {
         <p style={{ color: "#64748B", fontSize: 13, margin: "4px 0 0" }}>Vue synthétique · Tous périmètres</p>
       </div>
 
-      {/* Layout 2×3 + bloc économie sur 2 lignes à droite */}
+      {}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 160px", gridTemplateRows: "auto auto", gap: 12, marginBottom: 28 }}>
         <KpiCard label="Licences assignées"  value={fmt(sc.licencesAssignees)} sub="Stock actif" />
         <KpiCard label="Comptes actifs 30j"  value={fmt(sc.comptesActifs)}    sub={`${Math.round((sc.comptesActifs||0)/(sc.licencesAssignees||1)*100)}% des assignés`} color="#10B981" />
         <KpiCard label="Comptes inactifs"    value={fmt(sc.comptesInactifs)}  sub=">90j sans connexion" color="#F59E0B" alert />
-        {/* Bloc économie — span 2 lignes */}
+        {}
         <div style={{ gridRow: "1 / 3", background: "linear-gradient(160deg,#4F46E5,#7C3AED)", borderRadius: 14, padding: "20px 18px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "flex-start", color: "#fff" }}>
           <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#C7D2FE", marginBottom: 8 }}>Économie estimée</div>
           <div style={{ fontSize: 30, fontWeight: 800, fontFamily: "monospace", lineHeight: 1 }}>{fmtEur(eco)}</div>
@@ -369,7 +358,7 @@ function Scorecard({ filters, setGlossaire, liveData }) {
         <KpiCard label="Double assignation"  value={fmt(sc.doubleAssignation)}sub="Plans en conflit" color="#7C3AED" alert />
       </div>
 
-      {/* Adoption workload */}
+      {}
       <div style={{ background: "#fff", borderRadius: 16, padding: 28, border: "1px solid #EEF0F6" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
           <div>
@@ -405,10 +394,8 @@ function Scorecard({ filters, setGlossaire, liveData }) {
   );
 }
 
-// ─── LICENCES ─────────────────────────────────────────────────────────────────
 function Licences({ filters, liveData }) {
   const [sel, setSel] = useState("Tous");
-  // Plans : données réelles si disponibles, fictives sinon
   const allPlans = liveData?.licencesByPlan?.length
     ? liveData.licencesByPlan
     : (DATA.licencesByPlanByEntity[filters.entity] || DATA.licencesByPlanByEntity["Toutes"]);
@@ -419,9 +406,7 @@ function Licences({ filters, liveData }) {
   const actives   = fp.reduce((s,p)=>s+p.actives,0);
   const dispo     = acquises - assignees;
 
-  // Trend selon l'entité ET le plan
   const trendBase = DATA.trendByEntity[filters.entity] || DATA.trendByEntity["Toutes"];
-  // Calculer le ratio plan sélectionné vs total pour scaler la tendance
   const allPlansForRatio = DATA.licencesByPlanByEntity[filters.entity] || DATA.licencesByPlanByEntity["Toutes"];
   const totalAllAcq = allPlansForRatio.reduce((s,p)=>s+p.acquises,0);
   const selAcqForTrend = sel === "Tous" ? totalAllAcq : (allPlansForRatio.find(p=>p.plan===sel)?.acquises || totalAllAcq);
@@ -434,18 +419,14 @@ function Licences({ filters, liveData }) {
   }));
 
   const H = 160;
-  const PAD_L = 50; // espace axe Y
+  const PAD_L = 50; 
   const maxVal = Math.max(...trend.map(d => Math.max(d.acquises||0, d.engagement||0))) * 1.12;
   const toH = (v) => v ? Math.round((v / maxVal) * H) : 0;
   const toY = (v) => H - Math.round((v / maxVal) * H);
-
-  // Graduations axe Y (4 niveaux)
   const ySteps = [0, 0.25, 0.5, 0.75, 1].map(f => Math.round(maxVal * f));
 
   const nCols = trend.length;
-  const colW = 1 / nCols; // fraction 0..1
-
-  // Courbe engagement en coordonnées relatives (viewBox 0 0 100 H)
+  const colW = 1 / nCols;
   const engPoints = trend.map((d, i) => `${(i + 0.5) * 100 / nCols},${toY(d.engagement)}`).join(" ");
 
   return (
@@ -473,10 +454,10 @@ function Licences({ filters, liveData }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
 
-        {/* ── Total assigné vs stock ── */}
+        {}
         <div style={{ background: "#fff", borderRadius: 16, padding: 28, border: "1px solid #EEF0F6" }}>
           <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>Total assigné vs stock</h3>
-          {/* Légende globale */}
+          {}
           <div style={{ display: "flex", gap: 14, fontSize: 11, marginBottom: 20, flexWrap: "wrap" }}>
             <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 10, height: 10, background: "#4F46E5", borderRadius: 2, display: "inline-block" }} /> Actives</span>
             <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 10, height: 10, background: "#A78BFA", borderRadius: 2, display: "inline-block" }} /> Assignées</span>
@@ -497,7 +478,7 @@ function Licences({ filters, liveData }) {
                     <span style={{ color: "#10B981" }}>{pDispo}% dispo</span>
                   </div>
                 </div>
-                {/* Barre segmentée : actives | assignées-actives | dispo */}
+                {}
                 <div style={{ display: "flex", height: 18, borderRadius: 6, overflow: "hidden" }}>
                   <div style={{ width: `${pAct}%`,   background: "#4F46E5",         transition: "width 0.4s" }} />
                   <div style={{ width: `${pAss - pAct}%`, background: "#A78BFA",    transition: "width 0.4s" }} />
@@ -512,13 +493,13 @@ function Licences({ filters, liveData }) {
           })}
         </div>
 
-        {/* ── Tendance mensuelle : histogramme + courbe ── */}
+        {}
         <div style={{ background: "#fff", borderRadius: 16, padding: 28, border: "1px solid #EEF0F6" }}>
           <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 20 }}>Tendance mensuelle · Licences & engagement</h3>
 
-          {/* Zone graphique avec axe Y */}
+          {}
           <div style={{ display: "flex", gap: 0 }}>
-            {/* Axe Y */}
+            {}
             <div style={{ width: PAD_L, flexShrink: 0, display: "flex", flexDirection: "column-reverse", justifyContent: "space-between", height: H + 20, paddingBottom: 20 }}>
               {ySteps.map((v, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", paddingRight: 6, height: 0, position: "relative" }}>
@@ -527,16 +508,16 @@ function Licences({ filters, liveData }) {
               ))}
             </div>
 
-            {/* Zone graphique */}
+            {}
             <div style={{ flex: 1, position: "relative", height: H + 20 }}>
-              {/* Lignes de grille horizontales */}
+              {}
               <svg viewBox={`0 0 100 ${H}`} style={{ position: "absolute", bottom: 20, left: 0, right: 0, width: "100%", height: H, pointerEvents: "none" }} preserveAspectRatio="none">
                 {ySteps.slice(1).map((v, i) => (
                   <line key={i} x1="0" x2="100" y1={toY(v)} y2={toY(v)} stroke="#F1F5F9" strokeWidth="0.5" />
                 ))}
               </svg>
 
-              {/* Barres (acquises + assignées) */}
+              {}
               <div style={{ display: "flex", alignItems: "flex-end", height: H, position: "absolute", bottom: 20, left: 0, right: 0 }}>
                 {trend.map((d, i) => {
                   const isFutur = d.acquises === null;
@@ -555,7 +536,7 @@ function Licences({ filters, liveData }) {
                 })}
               </div>
 
-              {/* Courbe engagement SVG */}
+              {}
               <svg viewBox={`0 0 100 ${H}`} style={{ position: "absolute", bottom: 20, left: 0, right: 0, width: "100%", height: H, pointerEvents: "none", overflow: "visible" }} preserveAspectRatio="none">
                 <polyline points={engPoints} fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4 2" />
                 {trend.map((d, i) => (
@@ -563,7 +544,7 @@ function Licences({ filters, liveData }) {
                 ))}
               </svg>
 
-              {/* Labels mois */}
+              {}
               <div style={{ display: "flex", position: "absolute", bottom: 0, left: 0, right: 0 }}>
                 {trend.map((d, i) => (
                   <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 8, color: "#94A3B8" }}>{d.mois}</div>
@@ -572,7 +553,7 @@ function Licences({ filters, liveData }) {
             </div>
           </div>
 
-          {/* Légende */}
+          {}
           <div style={{ display: "flex", gap: 16, fontSize: 11, marginTop: 10, flexWrap: "wrap" }}>
             <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, background: "#4F46E5", borderRadius: 2, display: "inline-block" }} /> Acquises</span>
             <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, background: "#7C3AED", borderRadius: 2, display: "inline-block" }} /> Assignées</span>
@@ -582,7 +563,7 @@ function Licences({ filters, liveData }) {
             </span>
           </div>
 
-          {/* Alerte */}
+          {}
           <div style={{ marginTop: 14, padding: "10px 14px", background: "#FFF7ED", borderRadius: 10, border: "1px solid #FED7AA", fontSize: 11 }}>
             <span style={{ fontWeight: 600, color: "#C2410C" }}>⚠ Avril</span>
             <span style={{ color: "#92400E" }}> — Chute des assignations. À corréler avec les sorties SIRH. Engagement contractuel non ajusté.</span>
@@ -593,7 +574,6 @@ function Licences({ filters, liveData }) {
   );
 }
 
-// ─── GROUPE ───────────────────────────────────────────────────────────────────
 function Groupe({ filters }) {
   const allPlans = DATA.licencesByPlan;
   const [selPlans, setSelPlans] = useState(["E3"]);
@@ -625,7 +605,7 @@ function Groupe({ filters }) {
         {selPlans.length > 0 && <span style={{ fontSize: 10, color: "#94A3B8", marginLeft: 4 }}>{fmt(selAcquis)} licences · {Math.round(ratio*100)}% du périmètre {filters.entity !== "Toutes" ? filters.entity : ""}</span>}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-        {/* Vue par région */}
+        {}
         <div style={{ background: "#fff", borderRadius: 16, padding: 28, border: "1px solid #EEF0F6" }}>
           <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Vue par région</h3>
           <p style={{ fontSize: 11, color: "#94A3B8", marginBottom: 20 }}>{selPlans.length > 0 ? selPlans.join(" + ") : "—"}</p>
@@ -651,7 +631,7 @@ function Groupe({ filters }) {
             );
           })}
         </div>
-        {/* Vue par segment */}
+        {}
         <div style={{ background: "#fff", borderRadius: 16, padding: 28, border: "1px solid #EEF0F6" }}>
           <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Vue par segment métier</h3>
           <p style={{ fontSize: 11, color: "#94A3B8", marginBottom: 20 }}>{selPlans.length > 0 ? selPlans.join(" + ") : "—"}</p>
@@ -682,12 +662,10 @@ function Groupe({ filters }) {
   );
 }
 
-// ─── MIND MAP PROFILS ─────────────────────────────────────────────────────────
 function MindMapProfils({ filters }) {
   const [expanded, setExpanded] = useState(null);
   const profiles = DATA.profiles;
 
-  // Filtrage simulé par région/segment
   const filterMultiplier = useMemo(() => {
     if (filters.region !== "Toutes" || filters.segment !== "Tous") return 0.72;
     return 1;
@@ -701,7 +679,7 @@ function MindMapProfils({ filters }) {
         {filterMultiplier < 1 && <span style={{ color: "#7C3AED", marginLeft: 8 }}>· filtre actif</span>}
       </div>
 
-      {/* Nœud central */}
+      {}
       <div style={{ display: "flex", alignItems: "flex-start", gap: 20 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {profiles.map(p => {
@@ -709,17 +687,17 @@ function MindMapProfils({ filters }) {
             const isOpen = expanded === p.nom;
             return (
               <div key={p.nom}>
-                {/* Carte profil (nœud principal) */}
+                {}
                 <div
                   onClick={() => setExpanded(isOpen ? null : p.nom)}
                   style={{ display: "flex", alignItems: "stretch", cursor: "pointer", userSelect: "none" }}
                 >
-                  {/* Connecteur */}
+                  {}
                   <div style={{ display: "flex", alignItems: "center", marginRight: 0 }}>
                     <div style={{ width: 24, height: 2, background: p.couleur + "60" }} />
                     <div style={{ width: 8, height: 8, borderRadius: "50%", background: p.couleur, flexShrink: 0 }} />
                   </div>
-                  {/* Bloc profil */}
+                  {}
                   <div style={{ background: "#1E1B4B", borderRadius: 12, borderLeft: `3px solid ${p.couleur}`, padding: "12px 16px", minWidth: 160, transition: "background 0.2s", display: "flex", gap: 14, alignItems: "center" }}>
                     <div>
                       <div style={{ fontSize: 10, color: p.couleur, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>{p.nom}</div>
@@ -736,10 +714,10 @@ function MindMapProfils({ filters }) {
                   </div>
                 </div>
 
-                {/* Branches région + segment */}
+                {}
                 {isOpen && (
                   <div style={{ marginLeft: 32, marginTop: 8, display: "flex", gap: 24 }}>
-                    {/* Par région */}
+                    {}
                     <div>
                       <div style={{ fontSize: 9, color: "#6D6D8F", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, marginLeft: 16 }}>Par région</div>
                       {Object.entries(p.regions).map(([reg, n]) => {
@@ -759,7 +737,7 @@ function MindMapProfils({ filters }) {
                         );
                       })}
                     </div>
-                    {/* Par segment */}
+                    {}
                     <div>
                       <div style={{ fontSize: 9, color: "#6D6D8F", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, marginLeft: 16 }}>Par métier</div>
                       {Object.entries(p.segments).map(([seg, n]) => {
@@ -791,7 +769,7 @@ function MindMapProfils({ filters }) {
   );
 }
 
-// ─── PROFILS ──────────────────────────────────────────────────────────────────
+
 function Profils({ filters, liveData }) {
   const [filtre, setFiltre] = useState("Tous");
   const baseUsers = liveData?.profileUsers?.length ? liveData.profileUsers : DATA.profileUsers;
@@ -806,7 +784,6 @@ function Profils({ filters, liveData }) {
     return u;
   }, [filters, filtre]);
 
-  // ROI dynamique
   const roiDowngrade = useMemo(() => {
     return users.filter(u => u.eligibleDowngrade && u.downgradeVers).reduce((s, u) => {
       const coutActuel = u.coutPlan;
@@ -833,10 +810,10 @@ function Profils({ filters, liveData }) {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
-        {/* Mind map */}
+        {}
         <MindMapProfils filters={filters} />
 
-        {/* ROI dynamique + résumé */}
+        {}
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={{ background: "#fff", borderRadius: 16, padding: 22, border: "1px solid #EEF0F6" }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", marginBottom: 14 }}>💰 ROI potentiel · périmètre filtré</div>
@@ -871,14 +848,14 @@ function Profils({ filters, liveData }) {
             ))}
           </div>
 
-          {/* Export CSV */}
+          {}
           <button onClick={() => downloadCSV(csvData, `profils_${filters.period.replace(" ","_")}.csv`)} style={{ padding: "10px 20px", background: "#4F46E5", color: "#fff", border: "none", borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, justifyContent: "center" }}>
             ⬇ Exporter la liste utilisateurs (.csv)
           </button>
         </div>
       </div>
 
-      {/* Filtres table */}
+      {}
       <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
         <span style={{ fontSize: 12, color: "#64748B" }}>Afficher :</span>
         {[["Tous","Tous"],["downgrade","🔽 Éligibles downgrade"],["inactif","Inactifs"],["double","Double plan"],["bloqué","Bloqués"]].map(([val,label]) => (
@@ -927,7 +904,6 @@ function Profils({ filters, liveData }) {
   );
 }
 
-// ─── UTILISATEUR ──────────────────────────────────────────────────────────────
 function Utilisateur() {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
@@ -951,7 +927,7 @@ function Utilisateur() {
         <p style={{ color: "#64748B", fontSize: 13, margin: "4px 0 0" }}>Profil complet · Licences · Adoption · Power Platform · Copilot</p>
       </div>
 
-      {/* Barre de recherche */}
+      {}
       <div style={{ position: "relative", marginBottom: 24, maxWidth: 420 }}>
         <div style={{ display: "flex", alignItems: "center", background: "#fff", border: "1px solid #E2E8F0", borderRadius: 12, padding: "8px 14px", gap: 8 }}>
           <span style={{ color: "#94A3B8", fontSize: 15 }}>🔍</span>
@@ -993,7 +969,7 @@ function Utilisateur() {
 
       {u && (
         <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 20 }}>
-          {/* Carte identité */}
+          {}
           <div style={{ background: "#fff", borderRadius: 16, padding: 24, border: "1px solid #EEF0F6" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
               <div style={{ width: 44, height: 44, borderRadius: "50%", background: "linear-gradient(135deg,#4F46E5,#7C3AED)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 16, fontWeight: 700 }}>{u.prenom[0]}{u.nom[0]}</div>
@@ -1013,7 +989,7 @@ function Utilisateur() {
             </div>
           </div>
 
-          {/* Onglets usage */}
+          {}
           <div style={{ background: "#fff", borderRadius: 16, padding: 24, border: "1px solid #EEF0F6" }}>
             <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 16 }}>Usage information</h3>
             <div style={{ display: "flex", gap: 5, marginBottom: 22, flexWrap: "wrap" }}>
@@ -1024,7 +1000,7 @@ function Utilisateur() {
               ))}
             </div>
 
-            {/* MESSAGERIE */}
+            {}
             {tab === "Messagerie" && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
                 {[["Mails envoyés",u.adoption.mailsSent,"#4F46E5"],["Mails reçus",u.adoption.mailsRecu,"#4F46E5"],["Chat Teams",u.adoption.teamsChat,"#7C3AED"],["Réunions Teams",u.adoption.reunions,"#7C3AED"],["Taille boîte mail",u.messagerie.mailboxSize,"#10B981"],["Archive",u.messagerie.archiveSize,"#10B981"]].map(([l,v,c]) => (
@@ -1040,7 +1016,7 @@ function Utilisateur() {
               </div>
             )}
 
-            {/* M365 FEATURES */}
+            {}
             {tab === "M365" && (
               <div>
                 <p style={{ fontSize: 11, color: "#64748B", marginBottom: 16 }}>Features incluses dans le bundle <strong>{u.plan}</strong> · État d'activation</p>
@@ -1055,7 +1031,7 @@ function Utilisateur() {
               </div>
             )}
 
-            {/* ADOPTION DES OUTILS */}
+            {}
             {tab === "Adoption des outils" && (
               <div>
                 <p style={{ fontSize: 11, color: "#64748B", marginBottom: 16 }}>Scores d'usage · Source : Centre d'admin Microsoft · 30 derniers jours</p>
@@ -1080,7 +1056,7 @@ function Utilisateur() {
               </div>
             )}
 
-            {/* POWER PLATFORM */}
+            {}
             {tab === "Power Platform" && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                 <div>
@@ -1098,7 +1074,7 @@ function Utilisateur() {
               </div>
             )}
 
-            {/* COPILOT */}
+            {}
             {tab === "Copilot" && (
               <div>
                 {!u.copilot.actif ? (
