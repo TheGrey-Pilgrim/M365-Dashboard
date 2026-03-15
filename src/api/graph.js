@@ -1,17 +1,5 @@
-// ─── api/graph.js · Vercel Serverless Function ────────────────────────────────
-// Pont sécurisé entre React et Microsoft Graph API
-// Credentials lus depuis les variables d'environnement Vercel (jamais exposés)
-//
-// Usage depuis React :
-//   fetch('/api/graph?endpoint=subscribedSkus')
-//   fetch('/api/graph?endpoint=users')
-//   fetch('/api/graph?endpoint=reports/getEmailActivityUserDetail(period=\'D30\')')
-// ──────────────────────────────────────────────────────────────────────────────
-
-// ── Cache en mémoire (survit entre les appels tant que la fonction est chaude) ──
-// TTL : 1 heure — évite de saturer Graph API sur les rafraîchissements fréquents
 const cache = new Map();
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1 heure
+const CACHE_TTL_MS = 60 * 60 * 1000;
 
 function getCached(key) {
   const entry = cache.get(key);
@@ -23,7 +11,6 @@ function setCache(key, data) {
   cache.set(key, { data, ts: Date.now() });
 }
 
-// ── Obtenir un token OAuth2 via client_credentials ─────────────────────────────
 async function getAccessToken(tenantId, clientId, clientSecret) {
   const cacheKey = `token_${tenantId}`;
   const cached = getCached(cacheKey);
@@ -55,8 +42,6 @@ async function getAccessToken(tenantId, clientId, clientSecret) {
   return access_token;
 }
 
-// ── Appel Graph API avec pagination automatique ────────────────────────────────
-// Suit les @odata.nextLink jusqu'à épuisement — gère les tenants > 100 objets
 async function fetchGraphAllPages(token, endpoint) {
   let url = endpoint.startsWith('https://')
     ? endpoint
@@ -65,22 +50,20 @@ async function fetchGraphAllPages(token, endpoint) {
   const allValues = [];
   let lastResponse = null;
   let pageCount = 0;
-  const MAX_PAGES = 20; // sécurité anti-boucle infinie
-
+  const MAX_PAGES = 20; 
   while (url && pageCount < MAX_PAGES) {
     const res = await fetch(url, {
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: 'application/json',
-        ConsistencyLevel: 'eventual', // requis pour certains endpoints filtrés
+        ConsistencyLevel: 'eventual', 
       },
     });
 
     if (res.status === 429) {
-      // Rate limiting — attendre le délai indiqué par Microsoft
       const retryAfter = parseInt(res.headers.get('Retry-After') || '10', 10);
       await new Promise(r => setTimeout(r, retryAfter * 1000));
-      continue; // réessayer la même URL
+      continue; 
     }
 
     if (!res.ok) {
@@ -91,28 +74,24 @@ async function fetchGraphAllPages(token, endpoint) {
     const data = await res.json();
     lastResponse = data;
 
-    // Accumuler les valeurs paginées si présentes
+   
     if (Array.isArray(data.value)) {
       allValues.push(...data.value);
     }
 
-    // Suivre le nextLink si présent
+
     url = data['@odata.nextLink'] || null;
     pageCount++;
   }
 
-  // Si la réponse contient un tableau .value, retourner l'ensemble fusionné
   if (allValues.length > 0) {
     return { ...lastResponse, value: allValues, _pageCount: pageCount };
   }
 
-  // Sinon retourner la réponse telle quelle (ex: objet unique, CSV, etc.)
+
   return lastResponse;
 }
 
-// ── Endpoint spéciaux : rapports CSV → conversion JSON ────────────────────────
-// Les endpoints /reports/get* retournent du CSV par défaut
-// On détecte et parse automatiquement
 function csvToJson(csv) {
   const lines = csv.trim().split('\n');
   if (lines.length < 2) return [];
@@ -128,12 +107,12 @@ async function fetchReport(token, endpoint) {
   const res = await fetch(url, {
     headers: {
       Authorization: `Bearer ${token}`,
-      Accept: 'application/json', // demander JSON si possible
+      Accept: 'application/json',
     },
   });
 
   if (res.status === 302 || res.redirected) {
-    // Certains endpoints redirigent vers une URL de téléchargement
+  
     const redirectUrl = res.url || res.headers.get('Location');
     if (redirectUrl) {
       const redirectRes = await fetch(redirectUrl);
@@ -151,21 +130,20 @@ async function fetchReport(token, endpoint) {
 
   if (contentType.includes('application/json')) {
     const data = await res.json();
-    // Parfois Graph retourne un objet avec une URL de téléchargement
+
     if (data['@odata.context'] && !data.value) {
       return { value: [] };
     }
     return data;
   }
 
-  // Réponse CSV
+
   const text = await res.text();
   return { value: csvToJson(text) };
 }
 
-// ── Handler principal ──────────────────────────────────────────────────────────
 export default async function handler(req, res) {
-  // CORS — autoriser les appels depuis le frontend
+ 
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -191,7 +169,6 @@ export default async function handler(req, res) {
     });
   }
 
-  // ── Lire les credentials depuis les variables d'environnement ──
   const { AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET } = process.env;
 
   if (!AZURE_TENANT_ID || !AZURE_CLIENT_ID || !AZURE_CLIENT_SECRET) {
@@ -205,7 +182,6 @@ export default async function handler(req, res) {
     });
   }
 
-  // ── Vérifier le cache (sauf si ?nocache=1) ──
   const cacheKey = `graph_${endpoint}`;
   if (!nocache) {
     const cached = getCached(cacheKey);
@@ -216,10 +192,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ── 1. Obtenir le token ──
     const token = await getAccessToken(AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET);
 
-    // ── 2. Appeler Graph API selon le type d'endpoint ──
     let data;
     const isReport = endpoint.includes('reports/get');
 
@@ -228,8 +202,6 @@ export default async function handler(req, res) {
     } else {
       data = await fetchGraphAllPages(token, endpoint);
     }
-
-    // ── 3. Mettre en cache et retourner ──
     setCache(cacheKey, data);
     res.setHeader('X-Cache', 'MISS');
     return res.status(200).json(data);
